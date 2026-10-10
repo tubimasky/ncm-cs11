@@ -3,25 +3,7 @@
 'use strict'
 
 var API = (function () {
-  var BASE = serverBase() + '/api'
-
-  function serverBase() {
-    var configured = location.origin
-    return splitServer(configured).base
-  }
-
-  function splitServer(configured) {
-    var clean = configured || ''
-    var hash = clean.indexOf('#')
-    if (hash >= 0) clean = clean.slice(0, hash)
-    var query = clean.indexOf('?')
-    var search = query >= 0 ? clean.slice(query + 1) : ''
-    var keyMatch = /(?:^|&)key=([^&]*)/.exec(search)
-    return {
-      base: (query >= 0 ? clean.slice(0, query) : clean).replace(/\/$/, ''),
-      key: keyMatch ? decodeURIComponent(keyMatch[1]) : ''
-    }
-  }
+  try { localStorage.removeItem('ncm_gate_key') } catch (e) {}
 
   function store(k, v) {
     if (v === undefined) { try { return localStorage.getItem(k) } catch (e) { return null } }
@@ -30,12 +12,6 @@ var API = (function () {
 
   function getCookie() { return store('ncm_cookie') || '' }
   function setCookie(c) { store('ncm_cookie', c || '') }
-
-  ;(function () {
-    var legacy = /[?&]key=([^&]+)/.exec(location.search)
-    if (legacy) store('ncm_gate_key', decodeURIComponent(legacy[1]))
-  })()
-  function getKey() { return store('ncm_gate_key') || '' }
 
   function call(endpoint, params, retried) {
     return new Promise(function (resolve, reject) {
@@ -48,12 +24,10 @@ var API = (function () {
         if (p[k] === undefined || p[k] === null || p[k] === '') return
         parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(p[k]))
       })
-      var url = BASE + '/' + endpoint + (parts.length ? '?' + parts.join('&') : '')
+      var url = location.origin.replace(/\/$/, '') + '/api/' + endpoint + (parts.length ? '?' + parts.join('&') : '')
       var xhr = new XMLHttpRequest()
       xhr.open('GET', url, true)
       xhr.timeout = 20000
-      var gk = getKey()
-      if (gk) xhr.setRequestHeader('X-Gate-Key', gk)
       xhr.onload = function () {
         if (xhr.status === 403 && !retried && window.Android && window.Android.resyncGateCookie) {
           try { window.Android.resyncGateCookie() } catch (e) {}
@@ -76,6 +50,7 @@ var API = (function () {
 
   return {
     call: call,
+    serverBase: function () { return location.origin.replace(/\/$/, '') },
     getCookie: getCookie,
     setCookie: setCookie,
     clearAuth: function () { setCookie(''); store('ncm_uid', ''); store('ncm_name', ''); store('ncm_avatar', '') },
@@ -94,6 +69,8 @@ var API = (function () {
     playlistTracks: function (id, offset, limit) {
       return call('playlist/track/all', { id: id, offset: offset || 0, limit: limit || 300 })
     },
+    recommendResource: function () { return call('recommend/resource') },
+    recommendSongs: function (afresh) { return call('recommend/songs', { afresh: afresh ? 'true' : undefined }) },
     songDetail: function (ids) { return call('song/detail', { ids: ids }) },
     songUrl: function (id, level) {
       return call('song/url/v1', { id: id, level: level || 'exhigh' })

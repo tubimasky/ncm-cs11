@@ -25,6 +25,22 @@ test('gate denies UI and API requests without the configured key', async () => {
   const api = await worker.fetch(new Request('https://ncm.test/api/login/status'), env)
   assert.equal(api.status, 403)
   assert.deepEqual(await api.json(), { code: 403, message: 'gate denied' })
+  assert.equal(api.headers.get('access-control-allow-origin'), '*')
+})
+
+test('API CORS preflight allows temporary cross-origin browser configuration', async () => {
+  const response = await worker.fetch(new Request('https://ncm.test/api/login/qr/key', {
+    method: 'OPTIONS',
+    headers: {
+      origin: 'https://player.example',
+      'access-control-request-method': 'GET',
+      'access-control-request-headers': 'x-gate-key',
+    },
+  }), { GATE_KEY: 'secret', ASSETS: assets() })
+
+  assert.equal(response.status, 204)
+  assert.equal(response.headers.get('access-control-allow-origin'), '*')
+  assert.match(response.headers.get('access-control-allow-headers'), /X-Gate-Key/i)
 })
 
 test('valid gate cookie reaches assets and keeps web code uncached', async () => {
@@ -98,6 +114,7 @@ test('QR generation is handled in the Worker without an API origin', async () =>
   assert.equal(body.code, 200)
   assert.match(body.data.qrurl, /codekey=qr-key/)
   assert.match(body.data.qrimg, /^data:image\/svg\+xml;base64,/)
+  assert.equal(response.headers.get('access-control-allow-origin'), '*')
 })
 
 test('QR polling calls NetEase directly and returns login cookies in JSON', async () => {
@@ -198,6 +215,64 @@ test('account status uses the Worker weapi client without an external API servic
     assert.deepEqual(await response.json(), {
       data: { code: 200, profile: { userId: 123, nickname: 'ncm' } },
     })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('daily recommended playlists use the upstream recommend resource route', async () => {
+  const originalFetch = globalThis.fetch
+  let upstreamUrl
+  let upstreamHeaders
+  globalThis.fetch = async (input, init) => {
+    upstreamUrl = new URL(input)
+    upstreamHeaders = new Headers(init.headers)
+    return Response.json({ code: 200, recommend: [{ id: 12, name: 'daily mix' }] })
+  }
+
+  try {
+    const response = await worker.fetch(new Request(
+      'https://ncm.test/api/recommend/resource?cookie=MUSIC_U%3Daccount-cookie',
+      { headers: { 'x-gate-key': 'secret' } },
+    ), {
+      GATE_KEY: 'secret',
+      ASSETS: assets(),
+    })
+    assert.equal(upstreamUrl.hostname, 'music.163.com')
+    assert.equal(upstreamUrl.pathname, '/weapi/v1/discovery/recommend/resource')
+    assert.match(upstreamHeaders.get('cookie'), /MUSIC_U=account-cookie/)
+    assert.deepEqual(await response.json(), { code: 200, recommend: [{ id: 12, name: 'daily mix' }] })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('daily recommended songs support the upstream afresh parameter', async () => {
+  const originalFetch = globalThis.fetch
+  let upstreamUrl
+  let upstreamHeaders
+  let form
+  globalThis.fetch = async (input, init) => {
+    upstreamUrl = new URL(input)
+    upstreamHeaders = new Headers(init.headers)
+    form = new URLSearchParams(init.body)
+    return Response.json({ code: 200, data: { dailySongs: [{ id: 34, name: 'daily song' }] } })
+  }
+
+  try {
+    const response = await worker.fetch(new Request(
+      'https://ncm.test/api/recommend/songs?afresh=true&cookie=MUSIC_U%3Daccount-cookie',
+      { headers: { 'x-gate-key': 'secret' } },
+    ), {
+      GATE_KEY: 'secret',
+      ASSETS: assets(),
+    })
+    assert.equal(upstreamUrl.hostname, 'music.163.com')
+    assert.equal(upstreamUrl.pathname, '/weapi/v3/discovery/recommend/songs')
+    assert.match(upstreamHeaders.get('cookie'), /MUSIC_U=account-cookie/)
+    assert.ok(form.get('params'))
+    assert.ok(form.get('encSecKey'))
+    assert.deepEqual(await response.json(), { code: 200, data: { dailySongs: [{ id: 34, name: 'daily song' }] } })
   } finally {
     globalThis.fetch = originalFetch
   }

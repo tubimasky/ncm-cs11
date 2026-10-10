@@ -12,6 +12,9 @@ var App = (function () {
     fmBuffer: [],
     quality: localStorage.getItem('ncm_quality') || 'exhigh',
   }
+  var pageHistory = []
+  var activePage = null
+  var maxPageHistory = 12
   var debugCaptureTimer = null
 
   var ICON = {
@@ -73,6 +76,48 @@ var App = (function () {
     if (!enabled && hasClass(node, name)) node.className = node.className.replace(new RegExp('(^|\\s)' + name + '(?=\\s|$)', 'g'), ' ').replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '')
   }
 
+  function updateBackButton() {
+    var button = document.getElementById('nav-back')
+    if (!button) return
+    var canGoBack = pageHistory.length > 0 || (API.isLogged() && state.view !== 'recommend')
+    button.disabled = !canGoBack
+  }
+
+  function navigatePage(id, view, render, replace) {
+    var content = document.getElementById('content')
+    if (replace) pageHistory = []
+    else if (activePage && activePage.id !== id) {
+      activePage.scrollTop = content.scrollTop
+      pageHistory.push(activePage)
+      if (pageHistory.length > maxPageHistory) pageHistory.shift()
+    }
+    activePage = { id: id, view: view, render: render, scrollTop: 0 }
+    state.view = view
+    content.scrollTop = 0
+    updateBackButton()
+    render()
+  }
+
+  function backPage() {
+    var previous = pageHistory.pop()
+    if (previous) {
+      activePage = previous
+      state.view = previous.view
+      eachNode(document.querySelectorAll('.nav-btn'), function (button) {
+        toggleClass(button, 'active', button.getAttribute('data-view') === previous.view)
+      })
+      updateBackButton()
+      previous.render()
+      document.getElementById('content').scrollTop = previous.scrollTop || 0
+      return
+    }
+    if (API.isLogged() && state.view !== 'recommend') {
+      go('recommend', true)
+      return
+    }
+    updateBackButton()
+  }
+
   // ---------- utils ----------
   function fmt(s) { s = s || 0; var m = Math.floor(s / 60), r = Math.floor(s % 60); return m + ':' + (r < 10 ? '0' : '') + r }
   function el(html) { var d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstChild }
@@ -102,86 +147,98 @@ var App = (function () {
   }
 
   // ---------- routing ----------
-  function go(view) {
-    state.view = view
-    applyDebugMode()
-    eachNode(document.querySelectorAll('.nav-btn'), function (b) {
-      toggleClass(b, 'active', b.getAttribute('data-view') === view)
-    })
-    var content = document.getElementById('content')
-    content.scrollTop = 0
-    if (view === 'login') return renderLogin()
-    if (!API.isLogged()) { return renderLogin() }
-    if (view === 'nowplaying') renderNowPlaying()
-    else if (view === 'playlists') renderPlaylists()
-    else if (view === 'fm') renderFm()
-    else if (view === 'search') renderSearch()
-    else if (view === 'settings') renderSettings()
+  function go(view, replace) {
+    navigatePage('view:' + view, view, function () {
+      applyDebugMode()
+      eachNode(document.querySelectorAll('.nav-btn'), function (b) {
+        toggleClass(b, 'active', b.getAttribute('data-view') === view)
+      })
+      if (view === 'login') return renderLogin()
+      if (!API.isLogged()) { return renderLogin() }
+      if (view === 'nowplaying') renderNowPlaying()
+      else if (view === 'recommend') renderRecommendations()
+      else if (view === 'playlists') renderPlaylists()
+      else if (view === 'fm') renderFm()
+      else if (view === 'search') renderSearch()
+      else if (view === 'settings') renderSettings()
+    }, replace)
   }
 
   // ---------- login (QR) ----------
   var qrTimer = null
+  var qrGeneration = 0
   function renderLogin() {
+    clearInterval(qrTimer)
+    var generation = ++qrGeneration
     var c = document.getElementById('content')
     empty(c)
     c.appendChild(el('<h2>登录网易云音乐</h2>'))
     var wrap = el('<div class="login-wrap"></div>')
+    var serverButton
     if (window.Android && window.Android.openServerDialog) {
-      var serverButton = el('<button class="btn" id="login-server">服务器设置</button>')
+      serverButton = el('<button class="btn" id="login-server">服务器设置</button>')
       serverButton.onclick = function () { window.Android.openServerDialog() }
-      wrap.appendChild(serverButton)
     }
     var img = el('<img id="qr-img" alt="二维码">')
     var status = el('<div id="qr-status">生成二维码中…</div>')
     var tip = el('<div class="login-tip">打开手机网易云音乐 App → 扫一扫，确认登录。无需输入密码。</div>')
     wrap.appendChild(img); wrap.appendChild(status); wrap.appendChild(tip)
+    if (serverButton) wrap.appendChild(serverButton)
     c.appendChild(wrap)
     if (API.isLogged()) {
       status.textContent = '已登录，正在获取信息…'
       img.style.display = 'none'; tip.style.display = 'none'
       API.loginStatus().then(function (r) {
+        if (generation !== qrGeneration) return
         var p = r.data && r.data.profile
-        if (p) { API.saveProfile(p.userId, p.nickname, p.avatarUrl); updateLoginBtn(); go('playlists') }
-        else { status.textContent = '凭证已失效，请重新扫码'; API.clearAuth(); startQr() }
-      }).catch(function () { status.textContent = '获取信息失败，请重试' })
+        if (p) { API.saveProfile(p.userId, p.nickname, p.avatarUrl); updateLoginBtn(); go('recommend', true) }
+        else { status.textContent = '凭证已失效，请重新扫码'; API.clearAuth(); startQr(generation) }
+      }).catch(function () { if (generation === qrGeneration) status.textContent = '获取信息失败，请重试' })
       return
     }
-    startQr()
+    startQr(generation)
   }
 
-  function startQr() {
+  function startQr(generation) {
+    if (generation === undefined) generation = ++qrGeneration
     var img = document.getElementById('qr-img')
     var status = document.getElementById('qr-status')
     API.qrKey().then(function (r) {
+      if (generation !== qrGeneration) return
       var key = r.data && r.data.unikey
       if (!key) throw new Error(r.message || '接口未返回二维码凭证')
       return API.qrCreate(key).then(function (r2) {
+        if (generation !== qrGeneration) return
         if (!r2.data || !r2.data.qrimg) throw new Error(r2.message || '接口未返回二维码图片')
         img.src = r2.data.qrimg
         status.textContent = '请用手机网易云 App 扫码'
-        pollQr(key)
+        pollQr(key, generation)
       })
-    }).catch(function (e) { status.textContent = '生成失败：' + e.message })
+    }).catch(function (e) {
+      if (generation === qrGeneration) status.textContent = '生成失败：' + e.message
+    })
   }
 
-  function pollQr(key) {
+  function pollQr(key, generation) {
     clearInterval(qrTimer)
     var status = document.getElementById('qr-status')
     qrTimer = setInterval(function () {
       API.qrCheck(key).then(function (r) {
+        if (generation !== qrGeneration) return
         var code = r.code
         if (code === 801) status.textContent = '请用手机网易云 App 扫码'
         else if (code === 802) status.textContent = '已扫码，请在手机确认'
-        else if (code === 800) { status.textContent = '二维码过期，重新生成'; clearInterval(qrTimer); startQr() }
+        else if (code === 800) { status.textContent = '二维码过期，重新生成'; clearInterval(qrTimer); startQr(generation) }
         else if (code === 803) {
           status.textContent = '登录成功，正在读取账户…'
           clearInterval(qrTimer)
           if (r.cookie) API.setCookie(r.cookie)   // 803 body.cookie = Set-Cookie 拼接，必须存
           API.loginStatus().then(function (s) {
+            if (generation !== qrGeneration) return
             var p = s.data && s.data.profile
-            if (p) { API.saveProfile(p.userId, p.nickname, p.avatarUrl); updateLoginBtn(); go('playlists') }
+            if (p) { API.saveProfile(p.userId, p.nickname, p.avatarUrl); updateLoginBtn(); go('recommend', true) }
             else { status.textContent = '已授权但未取到账户，点左侧「歌单」重试' }
-          }).catch(function (e) { status.textContent = '读取账户失败：' + e.message })
+          }).catch(function (e) { if (generation === qrGeneration) status.textContent = '读取账户失败：' + e.message })
         }
       }).catch(function () {})
     }, 2000)
@@ -199,11 +256,12 @@ var App = (function () {
 
   function playlistCard(playlist) {
     var card = el('<div class="card"></div>')
-    card.appendChild(imageNode('', API.httpsPic(playlist.coverImgUrl)))
+    card.appendChild(imageNode('', API.httpsPic(playlist.coverImgUrl || playlist.picUrl)))
     var info = el('<div class="c-info"></div>')
     info.appendChild(textNode('div', 'c-name', playlist.name))
-    info.appendChild(textNode('div', 'c-cnt', playlist.playCount
-      ? Math.round(playlist.playCount / 10000) + '万播放'
+    var playCount = playlist.playCount || playlist.playcount
+    info.appendChild(textNode('div', 'c-cnt', playCount
+      ? Math.round(playCount / 10000) + '万播放'
       : (playlist.trackCount || 0) + ' 首'))
     card.appendChild(info)
     card.onclick = function () { renderPlaylistDetail(playlist.id, playlist.name) }
@@ -219,6 +277,126 @@ var App = (function () {
     card.appendChild(info)
     card.onclick = startFm
     return card
+  }
+
+  // ---------- daily recommendations ----------
+  function renderRecommendationSongs(songs) {
+    var view = state.view
+    navigatePage('recommend-songs', view, function () {
+      renderRecommendationSongPage(songs)
+    })
+  }
+
+  function renderRecommendationSongPage(songs) {
+    var c = document.getElementById('content'); empty(c)
+    var heading = el('<div class="recommend-detail-heading"><h2>每日推荐歌曲</h2></div>')
+    c.appendChild(heading)
+    var songsNode = el('<div class="list" id="rec-songs"></div>')
+    c.appendChild(songsNode)
+    songs.forEach(function (song, index) {
+      var row = el('<div class="row"></div>')
+      row.appendChild(textNode('div', 'idx', index + 1))
+      var cover = trackPic(song)
+      if (cover) {
+        var coverImage = imageNode('cv', cover)
+        coverImage.setAttribute('loading', 'lazy')
+        row.appendChild(coverImage)
+      } else row.appendChild(el('<div class="cv"></div>'))
+      var info = el('<div class="rec-song-info"></div>')
+      info.appendChild(textNode('div', 'ttl', trackName(song)))
+      info.appendChild(textNode('div', 'art', trackArtist(song)))
+      row.appendChild(info)
+      row.onclick = function () { state.mode = 'list'; playQueue(songs, index) }
+      songsNode.appendChild(row)
+    })
+  }
+
+  function renderRecommendations() {
+    var c = document.getElementById('content'); empty(c)
+    c.appendChild(el('<h2>每日推荐</h2>'))
+    var songsSection = el('<section class="recommend-section"><div class="recommend-daily-entry" id="rec-daily-entry" role="button" tabindex="0" aria-label="打开每日推荐歌曲列表"><img class="rec-daily-cover" alt=""><div class="rec-daily-info"><div class="rec-daily-title">每日推荐</div><div class="rec-daily-track">加载中…</div><div class="rec-daily-count"></div></div><button class="rec-daily-play" id="rec-play-all" type="button" aria-label="播放每日推荐" title="播放每日推荐" disabled></button></div></section>')
+    var playlistsSection = el('<section class="recommend-section"><div class="recommend-heading"><h3>推荐歌单</h3><button class="btn" id="rec-refresh">换一换</button></div><div class="grid" id="rec-playlists"></div></section>')
+    c.appendChild(songsSection)
+    c.appendChild(playlistsSection)
+
+    var dailyEntry = document.getElementById('rec-daily-entry')
+    var dailyCover = dailyEntry.querySelector('.rec-daily-cover')
+    var dailyTrack = dailyEntry.querySelector('.rec-daily-track')
+    var dailyCount = dailyEntry.querySelector('.rec-daily-count')
+    var playlistsNode = document.getElementById('rec-playlists')
+    var playAll = document.getElementById('rec-play-all')
+    var songs = []
+    var generation = 0
+
+    function load(refresh) {
+      var current = ++generation
+      playAll.disabled = true
+      dailyCover.removeAttribute('src')
+      dailyTrack.textContent = '加载中…'
+      dailyCount.textContent = ''
+      empty(playlistsNode)
+      playlistsNode.appendChild(el('<div class="loading">加载中…</div>'))
+
+      API.recommendSongs(refresh).then(function (result) {
+        if (current !== generation || document.getElementById('rec-daily-entry') !== dailyEntry) return
+        if (result.code && result.code !== 200) throw new Error(result.message || '每日推荐暂不可用')
+        var data = result.data || {}
+        songs = data.dailySongs || result.dailySongs || []
+        if (!songs.length) {
+          dailyTrack.textContent = result.message || '暂无推荐歌曲'
+          return
+        }
+        var firstCover = trackPic(songs[0])
+        if (firstCover) {
+          dailyCover.src = firstCover
+          dailyCover.style.visibility = 'visible'
+        } else {
+          dailyCover.removeAttribute('src')
+          dailyCover.style.visibility = 'hidden'
+        }
+        dailyTrack.textContent = trackName(songs[0])
+        var firstArtist = trackArtist(songs[0])
+        dailyCount.textContent = firstArtist
+          ? firstArtist + ' · ' + songs.length + ' 首歌曲'
+          : songs.length + ' 首歌曲'
+        playAll.disabled = false
+      }).catch(function (error) {
+        if (current !== generation || document.getElementById('rec-daily-entry') !== dailyEntry) return
+        dailyTrack.textContent = '推荐歌曲加载失败：' + error.message
+      })
+
+      API.recommendResource().then(function (result) {
+        if (current !== generation || document.getElementById('rec-playlists') !== playlistsNode) return
+        if (result.code && result.code !== 200) throw new Error(result.message || '每日推荐暂不可用')
+        var playlists = result.recommend || (result.data && result.data.recommend) || []
+        empty(playlistsNode)
+        if (!playlists.length) {
+          playlistsNode.appendChild(textNode('div', 'empty', result.message || '暂无每日推荐歌单'))
+          return
+        }
+        playlists.forEach(function (playlist) { playlistsNode.appendChild(playlistCard(playlist)) })
+      }).catch(function (error) {
+        if (current !== generation || document.getElementById('rec-playlists') !== playlistsNode) return
+        empty(playlistsNode)
+        playlistsNode.appendChild(textNode('div', 'empty', '推荐歌单加载失败：' + error.message))
+      })
+    }
+
+    dailyEntry.onclick = function () {
+      if (songs.length) renderRecommendationSongs(songs)
+    }
+    dailyEntry.onkeydown = function (event) {
+      if (event.target !== dailyEntry || (event.keyCode !== 13 && event.keyCode !== 32)) return
+      event.preventDefault()
+      if (songs.length) renderRecommendationSongs(songs)
+    }
+    playAll.innerHTML = ICON.play
+    playAll.onclick = function (event) {
+      event.stopPropagation()
+      if (songs.length) { state.mode = 'list'; playQueue(songs, 0) }
+    }
+    document.getElementById('rec-refresh').onclick = function () { load(true) }
+    load(false)
   }
 
   // ---------- playlists ----------
@@ -242,14 +420,24 @@ var App = (function () {
   }
 
   function renderPlaylistDetail(id, name) {
+    var view = state.view
+    navigatePage('playlist:' + id, view, function () {
+      renderPlaylistDetailPage(id, name)
+    })
+  }
+
+  function renderPlaylistDetailPage(id, name) {
     var c = document.getElementById('content'); empty(c)
-    c.appendChild(textNode('h2', '', name))
-    c.appendChild(el('<div class="loading" id="pd-load">加载中…</div>'))
+    var page = el('<div class="playlist-detail-page"></div>')
+    page.appendChild(textNode('h2', '', name))
+    page.appendChild(el('<div class="loading" id="pd-load">加载中…</div>'))
+    c.appendChild(page)
     API.playlistTracks(id).then(function (r) {
+      if (!page.parentNode) return
       var songs = r.songs || []
-      var load = document.getElementById('pd-load'); if (load) load.remove()
+      var load = page.querySelector('#pd-load'); if (load) load.remove()
       var playAll = el('<button class="btn" style="margin-bottom:12px">' + ICON.play + ' 播放全部</button>')
-      c.appendChild(playAll)
+      page.appendChild(playAll)
       var list = el('<div class="list"></div>')
       songs.forEach(function (s, i) {
         var row = el('<div class="row"></div>')
@@ -262,10 +450,11 @@ var App = (function () {
         row.onclick = function () { state.mode = 'list'; playQueue(songs, i) }
         list.appendChild(row)
       })
-      c.appendChild(list)
+      page.appendChild(list)
       playAll.onclick = function () { if (songs.length) { state.mode = 'list'; playQueue(songs, 0) } }
     }).catch(function (e) {
-      var load = document.getElementById('pd-load')
+      if (!page.parentNode) return
+      var load = page.querySelector('#pd-load')
       if (load) load.textContent = '加载失败：' + e.message
     })
   }
@@ -332,6 +521,11 @@ var App = (function () {
     loadRecommendations()
   }
   function startFm() {
+    var view = state.view
+    navigatePage('fm-playback', view, renderFmPlayer)
+  }
+
+  function renderFmPlayer() {
     var c = document.getElementById('content'); empty(c)
     c.appendChild(el('<h2>私人 FM</h2>'))
     c.appendChild(el('<div class="loading" id="fm-load">加载中…</div>'))
@@ -612,6 +806,7 @@ var App = (function () {
     eachNode(document.querySelectorAll('.nav-btn'), function (b) {
       b.onclick = function () { go(b.getAttribute('data-view')) }
     })
+    document.getElementById('nav-back').onclick = backPage
     document.getElementById('nav-login').onclick = function () { go(API.isLogged() ? 'settings' : 'login') }
     document.getElementById('pb-play').onclick = toggle
     document.getElementById('pb-next').onclick = next
@@ -674,21 +869,19 @@ var App = (function () {
   function renderSettings() {
     var c = document.getElementById('content'); empty(c)
     c.appendChild(el('<h2>设置</h2>'))
-    var serverLabel = location.origin
-    var gateSet = false
-    if (window.Android && window.Android.getServer) {
-      try { serverLabel = window.Android.getServer() } catch (e) {}
-    }
-    if (window.Android && window.Android.hasGateKey) {
-      try { gateSet = !!window.Android.hasGateKey() } catch (e) {}
-    } else {
-      gateSet = /(?:^|;\s*)ncm_gate=[^;]+/.test(document.cookie || '')
-    }
-    var srvRow = el('<div class="set-row"><div>服务器地址</div><div class="server-value"></div></div>')
-    srvRow.lastChild.textContent = serverLabel
-    c.appendChild(srvRow)
-    c.appendChild(el('<div class="set-row"><div>访问口令</div><div class="server-value">' + (gateSet ? '已设置' : '未设置') + '</div></div>'))
     if (window.Android && window.Android.openServerDialog) {
+      var serverLabel = location.origin
+      var gateSet = false
+      if (window.Android.getServer) {
+        try { serverLabel = window.Android.getServer() } catch (e) {}
+      }
+      if (window.Android.hasGateKey) {
+        try { gateSet = !!window.Android.hasGateKey() } catch (e) {}
+      }
+      var srvRow = el('<div class="set-row"><div>服务器地址</div><div class="server-value"></div></div>')
+      srvRow.lastChild.textContent = serverLabel
+      c.appendChild(srvRow)
+      c.appendChild(el('<div class="set-row"><div>访问口令</div><div class="server-value">' + (gateSet ? '已设置' : '未设置') + '</div></div>'))
       var srvBtn = el('<button class="btn" style="margin:0 0 16px">修改服务器地址</button>')
       c.appendChild(srvBtn)
       srvBtn.onclick = function () { window.Android.openServerDialog() }
@@ -736,7 +929,7 @@ var App = (function () {
       if (p) { API.saveProfile(p.userId, p.nickname, p.avatarUrl); document.getElementById('set-name').textContent = p.nickname }
       var img = acct.querySelector('img'); img.src = p && p.avatarUrl ? API.httpsPic(p.avatarUrl) : ''
     })
-    document.getElementById('logout').onclick = function () { API.clearAuth(); updateLoginBtn(); go('login') }
+    document.getElementById('logout').onclick = function () { API.clearAuth(); updateLoginBtn(); go('login', true) }
     c.appendChild(el('<div class="muted" style="margin-top:12px">后端：NeteaseCloudMusicApi Enhanced v4.40.1，经 /api 同源代理。音质受账号会员与版权限制，无版权歌曲由后端解灰自动尝试。</div>'))
   }
 
@@ -769,9 +962,9 @@ var App = (function () {
         var p = r.data && r.data.profile
         if (p) API.saveProfile(p.userId, p.nickname, p.avatarUrl)
         updateLoginBtn()
-        go(p ? 'playlists' : 'login')
-      }).catch(function () { go('login') })
-    } else go('login')
+        go(p ? 'recommend' : 'login', true)
+      }).catch(function () { go('login', true) })
+    } else go('login', true)
   }
 
   return { init: init }

@@ -10,8 +10,13 @@
 <div id="app">
   <aside id="nav">
     <div class="nav-logo"><img src="?__ncm_asset=logo.png" alt=""></div>
+    <button class="nav-back" id="nav-back" type="button" aria-label="返回上一页" title="返回上一页">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5 3 12l7 7v-5h11v-4H10z"/></svg>
+      <span>返回</span>
+    </button>
     <button class="nav-btn" data-view="nowplaying" data-title="当前播放">当前播放</button>
-    <button class="nav-btn active" data-view="playlists" data-title="我的歌单">歌单</button>
+    <button class="nav-btn active" data-view="recommend" data-title="每日推荐">推荐</button>
+    <button class="nav-btn" data-view="playlists" data-title="我的歌单">歌单</button>
     <button class="nav-btn" data-view="fm" data-title="私人FM">FM</button>
     <button class="nav-btn" data-view="search" data-title="搜索">搜索</button>
     <button class="nav-btn nav-login" data-view="login" id="nav-login" data-title="登录">未登录</button>

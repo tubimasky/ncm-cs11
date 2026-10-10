@@ -11,6 +11,11 @@ button{font:inherit; color:inherit; border:0; background:none; cursor:pointer}
   display:flex; flex-direction:column; align-items:center; padding:14px 0 34px; gap:10px}
 .nav-logo{width:60px; height:60px; margin-bottom:10px; display:flex; align-items:center; justify-content:center}
 .nav-logo img{width:56px; height:56px; object-fit:contain}
+.nav-back{width:92px; height:58px; flex:none; border-radius:12px; color:#c9c9d0; font-size:14px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px}
+.nav-back:active{background:#26262f; color:#fff}
+.nav-back:disabled{opacity:.35; cursor:default}
+.nav-back svg{width:21px; height:21px; fill:currentColor}
 .nav-btn{width:92px; height:64px; border-radius:14px; color:#8b8b97; font-size:16px; transition:.15s}
 .nav-btn.active{background:rgba(236,65,65,.14); color:#ec4141; font-weight:600}
 .nav-login{margin-top:auto; width:60px; height:60px; padding:0; display:flex; align-items:center; justify-content:center; overflow:hidden}
@@ -38,6 +43,32 @@ button{font:inherit; color:inherit; border:0; background:none; cursor:pointer}
 .card .c-info{padding:12px 12px 14px}
 .card .c-name{font-size:17px; font-weight:600; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
 .card .c-cnt{color:#5d5d68; font-size:14px; margin-top:6px}
+.recommend-section{margin:0 0 30px}
+.recommend-heading{display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:12px}
+.recommend-heading h3{font-size:20px; line-height:1.3; font-weight:600}
+.recommend-heading .btn{height:44px; padding:0 16px; border-radius:10px; font-size:16px}
+.recommend-heading .btn:disabled{opacity:.45; cursor:default}
+.rec-song-info{flex:1; min-width:0}
+.recommend-daily-entry{display:flex; align-items:center; gap:16px; min-height:100px; padding:12px;
+  border:1px solid #2a2a33; border-radius:12px; background:#1b1b22; cursor:pointer; transition:.12s}
+.recommend-daily-entry:active{background:#26262f; transform:scale(.995)}
+.rec-daily-cover{width:76px; height:76px; flex:none; border-radius:8px; object-fit:cover; background:#26262f}
+.rec-daily-info{flex:1; min-width:0}
+.rec-daily-title{color:#8b8b97; font-size:14px; line-height:1.4}
+.rec-daily-track{overflow:hidden; color:#f2f2f5; font-size:17px; font-weight:600; text-overflow:ellipsis; white-space:nowrap}
+.rec-daily-count{overflow:hidden; color:#8b8b97; font-size:13px; text-overflow:ellipsis; white-space:nowrap}
+.rec-daily-play{display:flex; align-items:center; justify-content:center; width:48px; height:48px; flex:none;
+  border-radius:50%; background:#ec4141; color:#fff}
+.rec-daily-play:active{background:#c82029; transform:scale(.94)}
+.rec-daily-play:disabled{background:#373741; color:#858590; cursor:default}
+.rec-daily-play svg{width:24px; height:24px; fill:currentColor}
+.recommend-detail-heading{margin-bottom:12px}
+.recommend-detail-heading h2{margin:2px 0 18px}
+#rec-songs .row{min-height:60px; gap:12px; padding:6px 12px; border-radius:10px}
+#rec-songs .row .idx{width:28px; font-size:15px}
+#rec-songs .row .cv{width:42px; height:42px; border-radius:7px}
+#rec-songs .row .ttl{font-size:16px}
+#rec-songs .row .art{font-size:13px}
 .section-head{position:relative; min-height:58px; margin-bottom:14px}
 .section-head h2{margin:2px 0 18px}
 .section-head .btn{position:absolute; right:0; top:0}
@@ -94,7 +125,6 @@ button{font:inherit; color:inherit; border:0; background:none; cursor:pointer}
 .login-tip{color:#5d5d68; font-size:16px; text-align:center; max-width:440px; line-height:1.6}
 .acct{display:flex; align-items:center; gap:16px}
 .acct img{width:64px; height:64px; border-radius:50%; background:#26262f}
-
 /* ---------- search ---------- */
 .search-bar{display:flex; gap:12px; margin-bottom:18px}
 .search-bar input{flex:1; height:60px; border-radius:16px; background:#1b1b22; border:1px solid #2a2a33;
