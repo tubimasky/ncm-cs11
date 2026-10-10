@@ -6,7 +6,7 @@ var path = require('node:path')
 var test = require('node:test')
 
 test('server configuration is an APK-only control shown before the login QR', function () {
-  var app = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8')
+  var app = fs.readFileSync(path.join(__dirname, 'web', 'app.js'), 'utf8')
   var login = app.slice(app.indexOf('function renderLogin()'), app.indexOf('function startQr()'))
   var nativeGuard = login.indexOf('if (window.Android && window.Android.openServerDialog)')
   var settingsButton = login.indexOf("el('<button class=\"btn\" id=\"login-server\">服务器设置</button>')")
