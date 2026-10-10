@@ -121,7 +121,10 @@ var App = (function () {
 
   // ---------- login (QR) ----------
   var qrTimer = null
+  var qrGeneration = 0
   function renderLogin() {
+    clearInterval(qrTimer)
+    var generation = ++qrGeneration
     var c = document.getElementById('content')
     empty(c)
     c.appendChild(el('<h2>登录网易云音乐</h2>'))
@@ -130,6 +133,10 @@ var App = (function () {
       var serverButton = el('<button class="btn" id="login-server">服务器设置</button>')
       serverButton.onclick = function () { window.Android.openServerDialog() }
       wrap.appendChild(serverButton)
+    } else {
+      var webServerButton = el('<button class="btn" id="login-server">连接其他后端</button>')
+      webServerButton.onclick = showWebServerDialog
+      wrap.appendChild(webServerButton)
     }
     var img = el('<img id="qr-img" alt="二维码">')
     var status = el('<div id="qr-status">生成二维码中…</div>')
@@ -140,48 +147,56 @@ var App = (function () {
       status.textContent = '已登录，正在获取信息…'
       img.style.display = 'none'; tip.style.display = 'none'
       API.loginStatus().then(function (r) {
+        if (generation !== qrGeneration) return
         var p = r.data && r.data.profile
         if (p) { API.saveProfile(p.userId, p.nickname, p.avatarUrl); updateLoginBtn(); go('playlists') }
-        else { status.textContent = '凭证已失效，请重新扫码'; API.clearAuth(); startQr() }
-      }).catch(function () { status.textContent = '获取信息失败，请重试' })
+        else { status.textContent = '凭证已失效，请重新扫码'; API.clearAuth(); startQr(generation) }
+      }).catch(function () { if (generation === qrGeneration) status.textContent = '获取信息失败，请重试' })
       return
     }
-    startQr()
+    startQr(generation)
   }
 
-  function startQr() {
+  function startQr(generation) {
+    if (generation === undefined) generation = ++qrGeneration
     var img = document.getElementById('qr-img')
     var status = document.getElementById('qr-status')
     API.qrKey().then(function (r) {
+      if (generation !== qrGeneration) return
       var key = r.data && r.data.unikey
       if (!key) throw new Error(r.message || '接口未返回二维码凭证')
       return API.qrCreate(key).then(function (r2) {
+        if (generation !== qrGeneration) return
         if (!r2.data || !r2.data.qrimg) throw new Error(r2.message || '接口未返回二维码图片')
         img.src = r2.data.qrimg
         status.textContent = '请用手机网易云 App 扫码'
-        pollQr(key)
+        pollQr(key, generation)
       })
-    }).catch(function (e) { status.textContent = '生成失败：' + e.message })
+    }).catch(function (e) {
+      if (generation === qrGeneration) status.textContent = '生成失败：' + e.message
+    })
   }
 
-  function pollQr(key) {
+  function pollQr(key, generation) {
     clearInterval(qrTimer)
     var status = document.getElementById('qr-status')
     qrTimer = setInterval(function () {
       API.qrCheck(key).then(function (r) {
+        if (generation !== qrGeneration) return
         var code = r.code
         if (code === 801) status.textContent = '请用手机网易云 App 扫码'
         else if (code === 802) status.textContent = '已扫码，请在手机确认'
-        else if (code === 800) { status.textContent = '二维码过期，重新生成'; clearInterval(qrTimer); startQr() }
+        else if (code === 800) { status.textContent = '二维码过期，重新生成'; clearInterval(qrTimer); startQr(generation) }
         else if (code === 803) {
           status.textContent = '登录成功，正在读取账户…'
           clearInterval(qrTimer)
           if (r.cookie) API.setCookie(r.cookie)   // 803 body.cookie = Set-Cookie 拼接，必须存
           API.loginStatus().then(function (s) {
+            if (generation !== qrGeneration) return
             var p = s.data && s.data.profile
             if (p) { API.saveProfile(p.userId, p.nickname, p.avatarUrl); updateLoginBtn(); go('playlists') }
             else { status.textContent = '已授权但未取到账户，点左侧「歌单」重试' }
-          }).catch(function (e) { status.textContent = '读取账户失败：' + e.message })
+          }).catch(function (e) { if (generation === qrGeneration) status.textContent = '读取账户失败：' + e.message })
         }
       }).catch(function () {})
     }, 2000)
@@ -195,6 +210,42 @@ var App = (function () {
     } else {
       b.textContent = API.isLogged() ? '已登录' : '未登录'
     }
+  }
+
+  function showWebServerDialog() {
+    if (window.Android && window.Android.openServerDialog) {
+      window.Android.openServerDialog()
+      return
+    }
+    var overlay = el('<div class="server-dialog-backdrop"><form class="server-dialog" role="dialog" aria-modal="true" aria-labelledby="server-dialog-title"><h2 id="server-dialog-title">连接其他后端</h2><label for="server-url">后端地址</label><input id="server-url" type="url" inputmode="url" autocomplete="url" placeholder="https://api.example.com" required><label for="server-key">访问口令</label><input id="server-key" type="password" autocomplete="off" placeholder="后端启用访问保护时填写"><div class="server-dialog-note">跨域后端需支持 CORS；配置仅在当前页面有效。</div><div id="server-error" class="server-dialog-error" role="status"></div><div class="server-dialog-actions"><button type="button" class="btn" id="server-cancel">取消</button><button type="submit" class="btn server-dialog-submit">连接</button></div></form></div>')
+    document.body.appendChild(overlay)
+    var form = overlay.querySelector('form')
+    var urlInput = document.getElementById('server-url')
+    var keyInput = document.getElementById('server-key')
+    var error = document.getElementById('server-error')
+    urlInput.value = API.serverBase()
+    function close() {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+    function onKeyDown(event) {
+      if (event.key === 'Escape') close()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    document.getElementById('server-cancel').onclick = close
+    overlay.onclick = function (event) { if (event.target === overlay) close() }
+    form.onsubmit = function (event) {
+      event.preventDefault()
+      try {
+        API.setServerConfig(urlInput.value, keyInput.value)
+        API.clearAuth()
+        updateLoginBtn()
+        close()
+        go('login')
+      } catch (e) { error.textContent = e.message }
+    }
+    urlInput.focus()
+    urlInput.select()
   }
 
   function playlistCard(playlist) {
@@ -674,24 +725,26 @@ var App = (function () {
   function renderSettings() {
     var c = document.getElementById('content'); empty(c)
     c.appendChild(el('<h2>设置</h2>'))
-    var serverLabel = location.origin
-    var gateSet = false
-    if (window.Android && window.Android.getServer) {
-      try { serverLabel = window.Android.getServer() } catch (e) {}
-    }
-    if (window.Android && window.Android.hasGateKey) {
-      try { gateSet = !!window.Android.hasGateKey() } catch (e) {}
-    } else {
-      gateSet = /(?:^|;\s*)ncm_gate=[^;]+/.test(document.cookie || '')
-    }
-    var srvRow = el('<div class="set-row"><div>服务器地址</div><div class="server-value"></div></div>')
-    srvRow.lastChild.textContent = serverLabel
-    c.appendChild(srvRow)
-    c.appendChild(el('<div class="set-row"><div>访问口令</div><div class="server-value">' + (gateSet ? '已设置' : '未设置') + '</div></div>'))
     if (window.Android && window.Android.openServerDialog) {
+      var serverLabel = location.origin
+      var gateSet = false
+      if (window.Android.getServer) {
+        try { serverLabel = window.Android.getServer() } catch (e) {}
+      }
+      if (window.Android.hasGateKey) {
+        try { gateSet = !!window.Android.hasGateKey() } catch (e) {}
+      }
+      var srvRow = el('<div class="set-row"><div>服务器地址</div><div class="server-value"></div></div>')
+      srvRow.lastChild.textContent = serverLabel
+      c.appendChild(srvRow)
+      c.appendChild(el('<div class="set-row"><div>访问口令</div><div class="server-value">' + (gateSet ? '已设置' : '未设置') + '</div></div>'))
       var srvBtn = el('<button class="btn" style="margin:0 0 16px">修改服务器地址</button>')
       c.appendChild(srvBtn)
       srvBtn.onclick = function () { window.Android.openServerDialog() }
+    } else {
+      var webServerButton = el('<button class="btn" style="margin:0 0 16px">连接其他后端</button>')
+      c.appendChild(webServerButton)
+      webServerButton.onclick = showWebServerDialog
     }
     var qRow = el('<div class="set-row"><div>音质</div><select id="q-sel">' +
       '<option value="standard">标准</option><option value="higher">较高</option>' +

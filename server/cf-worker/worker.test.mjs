@@ -25,6 +25,22 @@ test('gate denies UI and API requests without the configured key', async () => {
   const api = await worker.fetch(new Request('https://ncm.test/api/login/status'), env)
   assert.equal(api.status, 403)
   assert.deepEqual(await api.json(), { code: 403, message: 'gate denied' })
+  assert.equal(api.headers.get('access-control-allow-origin'), '*')
+})
+
+test('API CORS preflight allows temporary cross-origin browser configuration', async () => {
+  const response = await worker.fetch(new Request('https://ncm.test/api/login/qr/key', {
+    method: 'OPTIONS',
+    headers: {
+      origin: 'https://player.example',
+      'access-control-request-method': 'GET',
+      'access-control-request-headers': 'x-gate-key',
+    },
+  }), { GATE_KEY: 'secret', ASSETS: assets() })
+
+  assert.equal(response.status, 204)
+  assert.equal(response.headers.get('access-control-allow-origin'), '*')
+  assert.match(response.headers.get('access-control-allow-headers'), /X-Gate-Key/i)
 })
 
 test('valid gate cookie reaches assets and keeps web code uncached', async () => {
@@ -98,6 +114,7 @@ test('QR generation is handled in the Worker without an API origin', async () =>
   assert.equal(body.code, 200)
   assert.match(body.data.qrurl, /codekey=qr-key/)
   assert.match(body.data.qrimg, /^data:image\/svg\+xml;base64,/)
+  assert.equal(response.headers.get('access-control-allow-origin'), '*')
 })
 
 test('QR polling calls NetEase directly and returns login cookies in JSON', async () => {

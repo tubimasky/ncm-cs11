@@ -3,24 +3,20 @@
 'use strict'
 
 var API = (function () {
-  var BASE = serverBase() + '/api'
+  var defaultServer = location.origin.replace(/\/$/, '')
+  var server = defaultServer
+  var gateKey = ''
+  try { localStorage.removeItem('ncm_gate_key') } catch (e) {}
 
-  function serverBase() {
-    var configured = location.origin
-    return splitServer(configured).base
-  }
-
-  function splitServer(configured) {
-    var clean = configured || ''
-    var hash = clean.indexOf('#')
-    if (hash >= 0) clean = clean.slice(0, hash)
-    var query = clean.indexOf('?')
-    var search = query >= 0 ? clean.slice(query + 1) : ''
-    var keyMatch = /(?:^|&)key=([^&]*)/.exec(search)
-    return {
-      base: (query >= 0 ? clean.slice(0, query) : clean).replace(/\/$/, ''),
-      key: keyMatch ? decodeURIComponent(keyMatch[1]) : ''
+  function normalizeServer(value) {
+    var clean = String(value || '').trim()
+    var parsed = document.createElement('a')
+    try { parsed.href = clean } catch (e) {}
+    if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !parsed.host
+      || parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) {
+      throw new Error('请输入有效的 http(s) 后端地址，不要包含口令、参数或路径')
     }
+    return parsed.protocol + '//' + parsed.host
   }
 
   function store(k, v) {
@@ -30,12 +26,6 @@ var API = (function () {
 
   function getCookie() { return store('ncm_cookie') || '' }
   function setCookie(c) { store('ncm_cookie', c || '') }
-
-  ;(function () {
-    var legacy = /[?&]key=([^&]+)/.exec(location.search)
-    if (legacy) store('ncm_gate_key', decodeURIComponent(legacy[1]))
-  })()
-  function getKey() { return store('ncm_gate_key') || '' }
 
   function call(endpoint, params, retried) {
     return new Promise(function (resolve, reject) {
@@ -48,12 +38,11 @@ var API = (function () {
         if (p[k] === undefined || p[k] === null || p[k] === '') return
         parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(p[k]))
       })
-      var url = BASE + '/' + endpoint + (parts.length ? '?' + parts.join('&') : '')
+      var url = server + '/api/' + endpoint + (parts.length ? '?' + parts.join('&') : '')
       var xhr = new XMLHttpRequest()
       xhr.open('GET', url, true)
       xhr.timeout = 20000
-      var gk = getKey()
-      if (gk) xhr.setRequestHeader('X-Gate-Key', gk)
+      if (gateKey) xhr.setRequestHeader('X-Gate-Key', gateKey)
       xhr.onload = function () {
         if (xhr.status === 403 && !retried && window.Android && window.Android.resyncGateCookie) {
           try { window.Android.resyncGateCookie() } catch (e) {}
@@ -76,6 +65,13 @@ var API = (function () {
 
   return {
     call: call,
+    serverBase: function () { return server },
+    setServerConfig: function (url, key) {
+      var nextServer = normalizeServer(url)
+      server = nextServer
+      gateKey = String(key || '')
+      return server
+    },
     getCookie: getCookie,
     setCookie: setCookie,
     clearAuth: function () { setCookie(''); store('ncm_uid', ''); store('ncm_name', ''); store('ncm_avatar', '') },

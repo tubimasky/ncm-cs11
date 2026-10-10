@@ -91,6 +91,23 @@ toggle.addEventListener('click', function () {
 });
 })()</script></body></html>`
 
+const API_CORS_HEADERS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, OPTIONS',
+  'access-control-allow-headers': 'X-Gate-Key, Content-Type',
+  'access-control-max-age': '86400',
+}
+
+function withApiCors(response) {
+  const headers = new Headers(response.headers)
+  Object.keys(API_CORS_HEADERS).forEach((name) => headers.set(name, API_CORS_HEADERS[name]))
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
 function decodeCookie(value) {
   try {
     return decodeURIComponent(value)
@@ -135,6 +152,7 @@ function deny(request) {
       headers: {
         'content-type': 'application/json;charset=utf-8',
         'cache-control': 'no-store',
+        ...API_CORS_HEADERS,
       },
     })
   }
@@ -178,12 +196,17 @@ async function serveAsset(request, env) {
 export default {
   async fetch(request, env) {
     const requestUrl = new URL(request.url)
+    const isApiRequest = requestUrl.pathname.startsWith('/api/')
+    if (isApiRequest && request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: API_CORS_HEADERS })
+    }
     const configuredKey = env.GATE_KEY || ''
     if (!configuredKey) {
-      return new Response('GATE_KEY is not configured', {
+      const response = new Response('GATE_KEY is not configured', {
         status: 503,
         headers: { 'content-type': 'text/plain;charset=utf-8', 'cache-control': 'no-store' },
       })
+      return isApiRequest ? withApiCors(response) : response
     }
     if (!safeEqual(gateKey(request, requestUrl), configuredKey)) {
       return deny(request)
@@ -199,8 +222,8 @@ export default {
       })
     }
 
-    if (requestUrl.pathname.startsWith('/api/')) {
-      return handleNeteaseApi(requestUrl)
+    if (isApiRequest) {
+      return withApiCors(await handleNeteaseApi(requestUrl))
     }
 
     return serveAsset(request, env)

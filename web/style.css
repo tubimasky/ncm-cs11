@@ -94,6 +94,21 @@ button{font:inherit; color:inherit; border:0; background:none; cursor:pointer}
 .login-tip{color:#5d5d68; font-size:16px; text-align:center; max-width:440px; line-height:1.6}
 .acct{display:flex; align-items:center; gap:16px}
 .acct img{width:64px; height:64px; border-radius:50%; background:#26262f}
+.server-dialog-backdrop{position:fixed; top:0; right:0; bottom:0; left:0; z-index:90; display:flex; align-items:center; justify-content:center;
+  padding:20px; background:rgba(0,0,0,.72)}
+.server-dialog{width:100%; max-width:440px; padding:24px; border:1px solid #373741; border-radius:12px; background:#18181e;
+  box-shadow:0 20px 70px rgba(0,0,0,.55)}
+.server-dialog h2{margin:0 0 22px; font-size:22px; letter-spacing:0}
+.server-dialog label{display:block; margin:14px 0 8px; color:#c9c9d0; font-size:15px}
+.server-dialog input{width:100%; height:52px; padding:0 14px; border:1px solid #373741; border-radius:8px;
+  outline:none; background:#101014; color:#f2f2f5; font-size:16px}
+.server-dialog input:focus{border-color:#ec4141}
+.server-dialog-note{margin-top:12px; color:#858590; font-size:13px; line-height:1.5}
+.server-dialog-error{min-height:24px; padding-top:6px; color:#f0787c; font-size:14px}
+.server-dialog-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:12px}
+.server-dialog-actions .btn{height:48px; padding:0 18px; border-radius:8px}
+.server-dialog-actions .server-dialog-submit{background:#ec4141}
+.server-dialog-actions .server-dialog-submit:active{background:#c82029}
 
 /* ---------- search ---------- */
 .search-bar{display:flex; gap:12px; margin-bottom:18px}
