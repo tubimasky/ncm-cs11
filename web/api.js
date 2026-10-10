@@ -3,15 +3,24 @@
 'use strict'
 
 var API = (function () {
+  var BASE = serverBase() + '/api'
+
   function serverBase() {
-    return normalizeServerBase(store('ncm_server_url')) || normalizeServerBase(location.origin)
+    var configured = location.origin
+    return splitServer(configured).base
   }
 
-  function normalizeServerBase(configured) {
-    var clean = (configured || '').replace(/^\s+|\s+$/g, '')
-    if (!/^https?:\/\/[^/?#]+(?:\/[^?#]*)?$/i.test(clean)) return ''
-    clean = clean.replace(/\/+$/, '').replace(/\/api$/i, '')
-    return clean
+  function splitServer(configured) {
+    var clean = configured || ''
+    var hash = clean.indexOf('#')
+    if (hash >= 0) clean = clean.slice(0, hash)
+    var query = clean.indexOf('?')
+    var search = query >= 0 ? clean.slice(query + 1) : ''
+    var keyMatch = /(?:^|&)key=([^&]*)/.exec(search)
+    return {
+      base: (query >= 0 ? clean.slice(0, query) : clean).replace(/\/$/, ''),
+      key: keyMatch ? decodeURIComponent(keyMatch[1]) : ''
+    }
   }
 
   function store(k, v) {
@@ -26,7 +35,7 @@ var API = (function () {
     var legacy = /[?&]key=([^&]+)/.exec(location.search)
     if (legacy) store('ncm_gate_key', decodeURIComponent(legacy[1]))
   })()
-  function getKey() { return store('ncm_gate_key') || store('ncm_gk') || '' }
+  function getKey() { return store('ncm_gate_key') || '' }
 
   function call(endpoint, params, retried) {
     return new Promise(function (resolve, reject) {
@@ -39,7 +48,7 @@ var API = (function () {
         if (p[k] === undefined || p[k] === null || p[k] === '') return
         parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(p[k]))
       })
-      var url = serverBase() + '/api/' + endpoint + (parts.length ? '?' + parts.join('&') : '')
+      var url = BASE + '/' + endpoint + (parts.length ? '?' + parts.join('&') : '')
       var xhr = new XMLHttpRequest()
       xhr.open('GET', url, true)
       xhr.timeout = 20000
@@ -69,15 +78,6 @@ var API = (function () {
     call: call,
     getCookie: getCookie,
     setCookie: setCookie,
-    serverBase: serverBase,
-    gateKey: getKey,
-    setServerConfig: function (url, key) {
-      var normalized = normalizeServerBase(url)
-      if (!normalized) return false
-      store('ncm_server_url', normalized)
-      store('ncm_gate_key', (key || '').replace(/^\s+|\s+$/g, ''))
-      return true
-    },
     clearAuth: function () { setCookie(''); store('ncm_uid', ''); store('ncm_name', ''); store('ncm_avatar', '') },
     httpsPic: httpsPic,
 
