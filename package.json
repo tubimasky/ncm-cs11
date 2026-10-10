@@ -1,0 +1,19 @@
+{
+  "name": "ncm-cs11",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "server/cf-worker"
+  ],
+  "scripts": {
+    "test:worker": "npm --workspace ncm-cs11-worker test",
+    "check:worker": "wrangler deploy --dry-run",
+    "dev:worker": "wrangler dev",
+    "deploy:worker": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.149.0"
+  }
+}

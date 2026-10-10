@@ -21,7 +21,7 @@
 | 目录 | 说明 |
 |------|------|
 | `web/` | 移动优先播放器 Web UI。零框架、XHR + 原生 JS，兼容老车机 WebView |
-| `server/` | VPS 端：第三方 API（gitignore 不入库）+ 零依赖 Node 网关 + Docker 部署件 |
+| `server/` | VPS / Workers 后端：Node 网关与 Docker 部署件，以及可独立部署的 Cloudflare Worker |
 | `android/` | 车机网易云与原生设置入口 APK：纯 Android framework，零外部依赖，minSdk 19 |
 | `extras/` | 可直接侧载到车机的辅助 APK |
 
@@ -57,6 +57,10 @@ node server/gateway.js             # → :8080
 详见 `server/DEPLOY.md`：Docker Compose 一键部署、防火墙放行、流量与合规说明。
 
 公网必配访问口令：服务器上创建 `server/.env` 写 `GATE_KEY=<口令>`，无口令请求一律 403（防扫描白嫖）。
+
+## Cloudflare Workers 部署
+
+仓库包含不依赖常驻 Node.js 服务的 Worker 后端，可由 Cloudflare Dashboard 从 Git 仓库构建部署。配置和 Dashboard 操作步骤见 [`server/CF_WORKERS.md`](server/CF_WORKERS.md)。Worker 直接实现播放器所需的接口子集，不等于完整的 NeteaseCloudMusicApi Enhanced 部署。
 
 要点：海外服务器必须设 `ENABLE_RANDOM_CN_IP=true`（docker-compose.yml 已配好），
 否则网易对非大陆 IP 的请求返回 `460 cheating`，取歌登录全挂。

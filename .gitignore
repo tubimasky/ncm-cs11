@@ -28,6 +28,11 @@ session/
 # --- Node ---
 node_modules/
 server/api/
+server/cf-worker/.dev.vars
+server/cf-worker/.dev.vars.*
+server/cf-worker/.wrangler/
+server/cf-worker/node_modules/
+/.wrangler/
 _deploy/
 server/debug-screenshots/
 
