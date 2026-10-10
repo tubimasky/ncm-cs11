@@ -126,15 +126,16 @@ var App = (function () {
     empty(c)
     c.appendChild(el('<h2>登录网易云音乐</h2>'))
     var wrap = el('<div class="login-wrap"></div>')
+    if (window.Android && window.Android.openServerDialog) {
+      var serverButton = el('<button class="btn" id="login-server">服务器设置</button>')
+      serverButton.onclick = function () { window.Android.openServerDialog() }
+      wrap.appendChild(serverButton)
+    }
     var img = el('<img id="qr-img" alt="二维码">')
     var status = el('<div id="qr-status">生成二维码中…</div>')
     var tip = el('<div class="login-tip">打开手机网易云音乐 App → 扫一扫，确认登录。无需输入密码。</div>')
-    var serverButton = el('<button class="btn" id="login-server">服务器设置</button>')
-    wrap.appendChild(img); wrap.appendChild(status); wrap.appendChild(tip); wrap.appendChild(serverButton)
+    wrap.appendChild(img); wrap.appendChild(status); wrap.appendChild(tip)
     c.appendChild(wrap)
-    serverButton.onclick = function () {
-      if (window.Android && window.Android.openServerDialog) window.Android.openServerDialog()
-    }
     if (API.isLogged()) {
       status.textContent = '已登录，正在获取信息…'
       img.style.display = 'none'; tip.style.display = 'none'
@@ -687,9 +688,11 @@ var App = (function () {
     srvRow.lastChild.textContent = serverLabel
     c.appendChild(srvRow)
     c.appendChild(el('<div class="set-row"><div>访问口令</div><div class="server-value">' + (gateSet ? '已设置' : '未设置') + '</div></div>'))
-    var srvBtn = el('<button class="btn" style="margin:0 0 16px">修改服务器地址</button>')
-    c.appendChild(srvBtn)
-    srvBtn.onclick = function () { if (window.Android && window.Android.openServerDialog) window.Android.openServerDialog() }
+    if (window.Android && window.Android.openServerDialog) {
+      var srvBtn = el('<button class="btn" style="margin:0 0 16px">修改服务器地址</button>')
+      c.appendChild(srvBtn)
+      srvBtn.onclick = function () { window.Android.openServerDialog() }
+    }
     var qRow = el('<div class="set-row"><div>音质</div><select id="q-sel">' +
       '<option value="standard">标准</option><option value="higher">较高</option>' +
       '<option value="exhigh">极高</option><option value="lossless">无损 (VIP)</option>' +
