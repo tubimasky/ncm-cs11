@@ -65,6 +65,8 @@ The Worker currently implements the API methods used by the player:
 | `/api/login/qr/check` | Poll QR login and return account cookies |
 | `/api/login/status` | Read the account profile |
 | `/api/user/playlist` | List the account's playlists |
+| `/api/recommend/resource` | Read daily recommended playlists (login required) |
+| `/api/recommend/songs` | Read daily recommended songs (login required; supports `afresh=true`) |
 | `/api/likelist` | Read liked song IDs |
 | `/api/like` | Like or unlike a song |
 | `/api/playlist/track/all` | Read tracks in a playlist |

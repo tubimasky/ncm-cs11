@@ -90,6 +90,8 @@ var API = (function () {
     playlistTracks: function (id, offset, limit) {
       return call('playlist/track/all', { id: id, offset: offset || 0, limit: limit || 300 })
     },
+    recommendResource: function () { return call('recommend/resource') },
+    recommendSongs: function (afresh) { return call('recommend/songs', { afresh: afresh ? 'true' : undefined }) },
     songDetail: function (ids) { return call('song/detail', { ids: ids }) },
     songUrl: function (id, level) {
       return call('song/url/v1', { id: id, level: level || 'exhigh' })

@@ -113,6 +113,7 @@ var App = (function () {
     if (view === 'login') return renderLogin()
     if (!API.isLogged()) { return renderLogin() }
     if (view === 'nowplaying') renderNowPlaying()
+    else if (view === 'recommend') renderRecommendations()
     else if (view === 'playlists') renderPlaylists()
     else if (view === 'fm') renderFm()
     else if (view === 'search') renderSearch()
@@ -149,7 +150,7 @@ var App = (function () {
       API.loginStatus().then(function (r) {
         if (generation !== qrGeneration) return
         var p = r.data && r.data.profile
-        if (p) { API.saveProfile(p.userId, p.nickname, p.avatarUrl); updateLoginBtn(); go('playlists') }
+        if (p) { API.saveProfile(p.userId, p.nickname, p.avatarUrl); updateLoginBtn(); go('recommend') }
         else { status.textContent = '凭证已失效，请重新扫码'; API.clearAuth(); startQr(generation) }
       }).catch(function () { if (generation === qrGeneration) status.textContent = '获取信息失败，请重试' })
       return
@@ -194,7 +195,7 @@ var App = (function () {
           API.loginStatus().then(function (s) {
             if (generation !== qrGeneration) return
             var p = s.data && s.data.profile
-            if (p) { API.saveProfile(p.userId, p.nickname, p.avatarUrl); updateLoginBtn(); go('playlists') }
+            if (p) { API.saveProfile(p.userId, p.nickname, p.avatarUrl); updateLoginBtn(); go('recommend') }
             else { status.textContent = '已授权但未取到账户，点左侧「歌单」重试' }
           }).catch(function (e) { if (generation === qrGeneration) status.textContent = '读取账户失败：' + e.message })
         }
@@ -250,11 +251,12 @@ var App = (function () {
 
   function playlistCard(playlist) {
     var card = el('<div class="card"></div>')
-    card.appendChild(imageNode('', API.httpsPic(playlist.coverImgUrl)))
+    card.appendChild(imageNode('', API.httpsPic(playlist.coverImgUrl || playlist.picUrl)))
     var info = el('<div class="c-info"></div>')
     info.appendChild(textNode('div', 'c-name', playlist.name))
-    info.appendChild(textNode('div', 'c-cnt', playlist.playCount
-      ? Math.round(playlist.playCount / 10000) + '万播放'
+    var playCount = playlist.playCount || playlist.playcount
+    info.appendChild(textNode('div', 'c-cnt', playCount
+      ? Math.round(playCount / 10000) + '万播放'
       : (playlist.trackCount || 0) + ' 首'))
     card.appendChild(info)
     card.onclick = function () { renderPlaylistDetail(playlist.id, playlist.name) }
@@ -270,6 +272,82 @@ var App = (function () {
     card.appendChild(info)
     card.onclick = startFm
     return card
+  }
+
+  // ---------- daily recommendations ----------
+  function renderRecommendations() {
+    var c = document.getElementById('content'); empty(c)
+    c.appendChild(el('<h2>每日推荐</h2>'))
+    var songsSection = el('<section class="recommend-section"><div class="recommend-heading"><h3>推荐歌曲</h3><button class="btn" id="rec-play-all" disabled>播放全部</button></div><div class="list" id="rec-songs"></div></section>')
+    var playlistsSection = el('<section class="recommend-section"><div class="recommend-heading"><h3>推荐歌单</h3><button class="btn" id="rec-refresh">换一换</button></div><div class="grid" id="rec-playlists"></div></section>')
+    c.appendChild(songsSection)
+    c.appendChild(playlistsSection)
+
+    var songsNode = document.getElementById('rec-songs')
+    var playlistsNode = document.getElementById('rec-playlists')
+    var playAll = document.getElementById('rec-play-all')
+    var songs = []
+    var generation = 0
+
+    function load(refresh) {
+      var current = ++generation
+      playAll.disabled = true
+      empty(songsNode)
+      songsNode.appendChild(el('<div class="loading">加载中…</div>'))
+      empty(playlistsNode)
+      playlistsNode.appendChild(el('<div class="loading">加载中…</div>'))
+
+      API.recommendSongs(refresh).then(function (result) {
+        if (current !== generation || document.getElementById('rec-songs') !== songsNode) return
+        if (result.code && result.code !== 200) throw new Error(result.message || '每日推荐暂不可用')
+        var data = result.data || {}
+        songs = data.dailySongs || result.dailySongs || []
+        empty(songsNode)
+        if (!songs.length) {
+          songsNode.appendChild(textNode('div', 'empty', result.message || '暂无每日推荐歌曲'))
+          return
+        }
+        songs.forEach(function (song, index) {
+          var row = el('<div class="row"></div>')
+          row.appendChild(textNode('div', 'idx', index + 1))
+          var cover = trackPic(song)
+          row.appendChild(cover ? imageNode('cv', cover) : el('<div class="cv"></div>'))
+          var info = el('<div class="rec-song-info"></div>')
+          info.appendChild(textNode('div', 'ttl', trackName(song)))
+          info.appendChild(textNode('div', 'art', trackArtist(song)))
+          row.appendChild(info)
+          row.onclick = function () { state.mode = 'list'; playQueue(songs, index) }
+          songsNode.appendChild(row)
+        })
+        playAll.disabled = false
+      }).catch(function (error) {
+        if (current !== generation || document.getElementById('rec-songs') !== songsNode) return
+        empty(songsNode)
+        songsNode.appendChild(textNode('div', 'empty', '推荐歌曲加载失败：' + error.message))
+      })
+
+      API.recommendResource().then(function (result) {
+        if (current !== generation || document.getElementById('rec-playlists') !== playlistsNode) return
+        if (result.code && result.code !== 200) throw new Error(result.message || '每日推荐暂不可用')
+        var playlists = result.recommend || (result.data && result.data.recommend) || []
+        empty(playlistsNode)
+        if (!playlists.length) {
+          playlistsNode.appendChild(textNode('div', 'empty', result.message || '暂无每日推荐歌单'))
+          return
+        }
+        playlists.forEach(function (playlist) { playlistsNode.appendChild(playlistCard(playlist)) })
+      }).catch(function (error) {
+        if (current !== generation || document.getElementById('rec-playlists') !== playlistsNode) return
+        empty(playlistsNode)
+        playlistsNode.appendChild(textNode('div', 'empty', '推荐歌单加载失败：' + error.message))
+      })
+    }
+
+    playAll.onclick = function () {
+      if (songs.length) { state.mode = 'list'; playQueue(songs, 0) }
+    }
+    document.getElementById('rec-refresh').onclick = function () { load(true) }
+    load(false)
   }
 
   // ---------- playlists ----------
@@ -822,7 +900,7 @@ var App = (function () {
         var p = r.data && r.data.profile
         if (p) API.saveProfile(p.userId, p.nickname, p.avatarUrl)
         updateLoginBtn()
-        go(p ? 'playlists' : 'login')
+        go(p ? 'recommend' : 'login')
       }).catch(function () { go('login') })
     } else go('login')
   }

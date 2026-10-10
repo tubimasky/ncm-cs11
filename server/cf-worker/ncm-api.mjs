@@ -272,6 +272,18 @@ export async function handleNeteaseApi(requestUrl) {
       return response(result.body)
     }
 
+    if (route === 'recommend/resource') {
+      const result = await postNetease('/api/v1/discovery/recommend/resource', {}, cookie, 'weapi')
+      return response(result.body)
+    }
+
+    if (route === 'recommend/songs') {
+      const params = {}
+      if (query.afresh !== undefined) params.afresh = query.afresh
+      const result = await postNetease('/api/v3/discovery/recommend/songs', params, cookie, 'weapi')
+      return response(result.body)
+    }
+
     if (route === 'likelist') {
       const result = await postNetease('/api/song/like/get', {
         uid: query.uid || '',

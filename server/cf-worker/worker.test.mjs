@@ -220,6 +220,64 @@ test('account status uses the Worker weapi client without an external API servic
   }
 })
 
+test('daily recommended playlists use the upstream recommend resource route', async () => {
+  const originalFetch = globalThis.fetch
+  let upstreamUrl
+  let upstreamHeaders
+  globalThis.fetch = async (input, init) => {
+    upstreamUrl = new URL(input)
+    upstreamHeaders = new Headers(init.headers)
+    return Response.json({ code: 200, recommend: [{ id: 12, name: 'daily mix' }] })
+  }
+
+  try {
+    const response = await worker.fetch(new Request(
+      'https://ncm.test/api/recommend/resource?cookie=MUSIC_U%3Daccount-cookie',
+      { headers: { 'x-gate-key': 'secret' } },
+    ), {
+      GATE_KEY: 'secret',
+      ASSETS: assets(),
+    })
+    assert.equal(upstreamUrl.hostname, 'music.163.com')
+    assert.equal(upstreamUrl.pathname, '/weapi/v1/discovery/recommend/resource')
+    assert.match(upstreamHeaders.get('cookie'), /MUSIC_U=account-cookie/)
+    assert.deepEqual(await response.json(), { code: 200, recommend: [{ id: 12, name: 'daily mix' }] })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('daily recommended songs support the upstream afresh parameter', async () => {
+  const originalFetch = globalThis.fetch
+  let upstreamUrl
+  let upstreamHeaders
+  let form
+  globalThis.fetch = async (input, init) => {
+    upstreamUrl = new URL(input)
+    upstreamHeaders = new Headers(init.headers)
+    form = new URLSearchParams(init.body)
+    return Response.json({ code: 200, data: { dailySongs: [{ id: 34, name: 'daily song' }] } })
+  }
+
+  try {
+    const response = await worker.fetch(new Request(
+      'https://ncm.test/api/recommend/songs?afresh=true&cookie=MUSIC_U%3Daccount-cookie',
+      { headers: { 'x-gate-key': 'secret' } },
+    ), {
+      GATE_KEY: 'secret',
+      ASSETS: assets(),
+    })
+    assert.equal(upstreamUrl.hostname, 'music.163.com')
+    assert.equal(upstreamUrl.pathname, '/weapi/v3/discovery/recommend/songs')
+    assert.match(upstreamHeaders.get('cookie'), /MUSIC_U=account-cookie/)
+    assert.ok(form.get('params'))
+    assert.ok(form.get('encSecKey'))
+    assert.deepEqual(await response.json(), { code: 200, data: { dailySongs: [{ id: 34, name: 'daily song' }] } })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('liked song list is available through the APK API contract', async () => {
   const originalFetch = globalThis.fetch
   let upstreamUrl
