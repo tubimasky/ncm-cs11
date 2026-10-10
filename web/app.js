@@ -121,48 +121,6 @@ var App = (function () {
 
   // ---------- login (QR) ----------
   var qrTimer = null
-  function openServerSettings() {
-    if (window.Android && window.Android.openServerDialog) {
-      window.Android.openServerDialog()
-      return
-    }
-
-    var overlay = el('<div class="server-config-backdrop"><section class="server-config" role="dialog" aria-modal="true" aria-labelledby="server-config-title">' +
-      '<h2 id="server-config-title">服务器设置</h2><form id="server-config-form">' +
-      '<label for="server-config-url">后端地址</label><input id="server-config-url" type="url" inputmode="url" autocomplete="url" placeholder="https://example.workers.dev" required>' +
-      '<label for="server-config-key">访问口令</label><input id="server-config-key" type="password" autocomplete="current-password" placeholder="未启用口令时留空">' +
-      '<div class="server-config-error" id="server-config-error" role="status" aria-live="polite"></div>' +
-      '<div class="server-config-actions"><button class="btn" id="server-config-cancel" type="button">取消</button><button class="btn primary" type="submit">保存并连接</button></div>' +
-      '</form></section></div>')
-    document.body.appendChild(overlay)
-
-    var form = document.getElementById('server-config-form')
-    var urlInput = document.getElementById('server-config-url')
-    var keyInput = document.getElementById('server-config-key')
-    var error = document.getElementById('server-config-error')
-    urlInput.value = API.serverBase()
-    keyInput.value = API.gateKey()
-
-    function close() {
-      if (overlay.parentNode) overlay.parentNode.removeChild(overlay)
-    }
-    document.getElementById('server-config-cancel').onclick = close
-    overlay.onclick = function (event) { if (event.target === overlay) close() }
-    overlay.onkeydown = function (event) {
-      if ((event.key === 'Escape' || event.keyCode === 27)) close()
-    }
-    form.onsubmit = function (event) {
-      event.preventDefault()
-      if (!API.setServerConfig(urlInput.value, keyInput.value)) {
-        error.textContent = '请输入有效的 http:// 或 https:// 后端地址'
-        urlInput.focus()
-        return
-      }
-      window.location.reload()
-    }
-    urlInput.focus()
-  }
-
   function renderLogin() {
     var c = document.getElementById('content')
     empty(c)
@@ -174,7 +132,9 @@ var App = (function () {
     var serverButton = el('<button class="btn" id="login-server">服务器设置</button>')
     wrap.appendChild(img); wrap.appendChild(status); wrap.appendChild(tip); wrap.appendChild(serverButton)
     c.appendChild(wrap)
-    serverButton.onclick = openServerSettings
+    serverButton.onclick = function () {
+      if (window.Android && window.Android.openServerDialog) window.Android.openServerDialog()
+    }
     if (API.isLogged()) {
       status.textContent = '已登录，正在获取信息…'
       img.style.display = 'none'; tip.style.display = 'none'
@@ -713,7 +673,7 @@ var App = (function () {
   function renderSettings() {
     var c = document.getElementById('content'); empty(c)
     c.appendChild(el('<h2>设置</h2>'))
-    var serverLabel = API.serverBase()
+    var serverLabel = location.origin
     var gateSet = false
     if (window.Android && window.Android.getServer) {
       try { serverLabel = window.Android.getServer() } catch (e) {}
@@ -721,7 +681,7 @@ var App = (function () {
     if (window.Android && window.Android.hasGateKey) {
       try { gateSet = !!window.Android.hasGateKey() } catch (e) {}
     } else {
-      gateSet = !!API.gateKey() || /(?:^|;\s*)ncm_gate=[^;]+/.test(document.cookie || '')
+      gateSet = /(?:^|;\s*)ncm_gate=[^;]+/.test(document.cookie || '')
     }
     var srvRow = el('<div class="set-row"><div>服务器地址</div><div class="server-value"></div></div>')
     srvRow.lastChild.textContent = serverLabel
@@ -729,7 +689,7 @@ var App = (function () {
     c.appendChild(el('<div class="set-row"><div>访问口令</div><div class="server-value">' + (gateSet ? '已设置' : '未设置') + '</div></div>'))
     var srvBtn = el('<button class="btn" style="margin:0 0 16px">修改服务器地址</button>')
     c.appendChild(srvBtn)
-    srvBtn.onclick = openServerSettings
+    srvBtn.onclick = function () { if (window.Android && window.Android.openServerDialog) window.Android.openServerDialog() }
     var qRow = el('<div class="set-row"><div>音质</div><select id="q-sel">' +
       '<option value="standard">标准</option><option value="higher">较高</option>' +
       '<option value="exhigh">极高</option><option value="lossless">无损 (VIP)</option>' +
