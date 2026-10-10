@@ -10,22 +10,24 @@ The repository root contains `wrangler.jsonc` and an npm workspace so Cloudflare
 
 1. Fork this repository to your GitHub account.
 2. In Cloudflare, open **Workers & Pages** and choose **Create application → Import a repository**. Select the Worker / Workers Builds flow, not a static Pages project. Connect GitHub and select your fork.
-3. Set the project root directory to the repository root (leave it blank if the Dashboard represents the root as an empty value or `/`). Do not set it to `server/cf-worker`.
-4. Set the build command to:
+3. Select the `feat/cloudflare-workers-dashboard` branch for the initial test.
+4. Set the Worker name to `ncm-cs11`, matching the `name` in the root `wrangler.jsonc`. If that name is already used in your account, change `name` in `wrangler.jsonc` to the desired unique Worker name before connecting.
+5. Set the project root directory to the repository root (leave it blank if the Dashboard represents the root as an empty value or `/`). Do not set it to `server/cf-worker`.
+6. Set the build command to:
 
    ```sh
    npm run test:worker && npm run check:worker
    ```
 
-5. Set the deploy command to:
+7. Set the deploy command to:
 
    ```sh
    npm run deploy:worker
    ```
 
-6. Leave the build output directory empty. Wrangler reads the root `wrangler.jsonc`; it configures the Worker entry, static assets, and `workers.dev` endpoint.
-7. Complete the first deployment, then add `GATE_KEY` as an encrypted secret under the Worker **Settings → Variables and Secrets**. Do not add it to a build variable, source file, or repository.
-8. Confirm the deployment has a `workers.dev` endpoint under **Settings → Domains & Routes**. If the Dashboard says **No active routes**, enable the `workers.dev` route or attach a custom domain, then deploy again.
+8. Leave the build output directory empty. Wrangler reads the root `wrangler.jsonc`; it configures the Worker entry, static assets, and `workers.dev` endpoint.
+9. Complete the first deployment, then add `GATE_KEY` as an encrypted secret under the Worker **Settings → Variables and Secrets**. Do not add it to a build variable, source file, or repository.
+10. Confirm the deployment has a `workers.dev` endpoint under **Settings → Domains & Routes**. If the Dashboard says **No active routes**, enable the `workers.dev` route or attach a custom domain, then deploy again.
 
 Do not use the single-file upload/Quick Edit flow for this project. It does not run the npm workspace build. Use Git integration as above or Wrangler CLI.
 
