@@ -10,7 +10,7 @@ The repository root contains `wrangler.jsonc` and an npm workspace so Cloudflare
 
 1. Fork this repository to your GitHub account.
 2. In Cloudflare, open **Workers & Pages** and choose **Create application → Import a repository**. Select the Worker / Workers Builds flow, not a static Pages project. Connect GitHub and select your fork.
-3. Select the `feat/cloudflare-workers-dashboard` branch for the initial test.
+3. Select the `main` branch.
 4. Set the Worker name to `ncm-cs11`, matching the `name` in the root `wrangler.jsonc`. If that name is already used in your account, change `name` in `wrangler.jsonc` to the desired unique Worker name before connecting.
 5. Set the project root directory to the repository root (leave it blank if the Dashboard represents the root as an empty value or `/`). Do not set it to `server/cf-worker`.
 6. Set the build command to:
